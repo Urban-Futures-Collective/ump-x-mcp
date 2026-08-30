@@ -15,7 +15,6 @@ htmlcov/
 .env
 .env.*
 tests/
-docker-compose.yml
 DEPLOY.md
 CLAUDE.md
 .claude/

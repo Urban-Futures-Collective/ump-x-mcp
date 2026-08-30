@@ -4,29 +4,34 @@ The `deploy` branch is the release pointer: **every push to it triggers a rebuil
 and redeploy** of the MCP server on the Dokploy host. `main` is where work lands;
 `deploy` is what runs.
 
+Dokploy builds the repository's [`Dockerfile`](Dockerfile) as an *Application*.
+Domain, TLS and routing come from the Dokploy UI; configuration comes from the
+Environment tab and stays on the server. Nothing secret is committed.
+
 ## One-time setup in Dokploy
 
-1. **Create → Compose** in the target project.
+1. **Create → Application** in the target project.
 2. **Provider**: GitHub (or Git) → repository `Urban-Futures-Collective/ump-x-mcp`,
-   **branch `deploy`**, compose path `./docker-compose.yml`.
-3. **Environment**: paste the variables below. Dokploy stores them on the server and
-   writes them to `.env` beside the compose file — they are never committed.
-4. **Enable Auto Deploy**. Dokploy shows a webhook URL; add it to the repo under
+   **branch `deploy`**.
+3. **Build Type**: `Dockerfile`, path `./Dockerfile`.
+4. **Environment**: paste the variables below. Dokploy injects them into the
+   container and keeps them on the server.
+5. **Domains**: add the public hostname, **container port `8000`**, HTTPS on with
+   the Let's Encrypt certificate resolver. Point the DNS record at the server first
+   so the certificate can be issued.
+6. **Enable Auto Deploy**. Dokploy shows a webhook URL; add it to the repo under
    *Settings → Webhooks* (content type `application/json`, event: `push`) if the
    GitHub integration did not add it automatically.
-5. **Deploy**.
+7. **Deploy**.
 
-The compose file attaches the service to the external `dokploy-network` and carries
-its own Traefik labels, so the domain comes from `UMP_MCP_DOMAIN` rather than the
-Dokploy domain UI. Point that DNS record at the server before the first deploy so
-Let's Encrypt can issue the certificate.
+The transport is stateless (`json_response=True`), so no session affinity is needed
+— the replica count in the Advanced tab can be raised without further changes.
 
 ## Environment
 
 Required:
 
 ```dotenv
-UMP_MCP_DOMAIN=mcp.example.org
 UMP_MCP_UMP_API_BASE_URL=https://ump.example.org/api
 UMP_MCP_KEYCLOAK_URL=https://auth.example.org
 UMP_MCP_KEYCLOAK_REALM=UMP
@@ -42,6 +47,9 @@ under a public URL but Keycloak is reached internally under another one. See
 matching Keycloak audience mapper. Leave `UMP_MCP_ALLOW_ANONYMOUS=false` so the
 zero-trust invariant holds: no valid JWT, no tools.
 
+Leave `UMP_MCP_HOST`/`UMP_MCP_PORT` at their defaults (`0.0.0.0:8000`) — the
+Dockerfile's `EXPOSE` and healthcheck and the domain's container port assume `8000`.
+
 ## Shipping a release
 
 ```bash
@@ -55,20 +63,17 @@ older or specific commit:
 git push origin <sha>:deploy
 ```
 
-Roll back the same way — push the previous good SHA. `deploy` is only ever
+Roll back that way, or from Dokploy's deployment history. `deploy` is only ever
 fast-forwarded from `main`; nothing is committed on it directly, so the two branches
 never diverge.
 
 ## Verifying
 
 ```bash
-curl https://$UMP_MCP_DOMAIN/health                       # unauthenticated, expects 200
+curl https://mcp.example.org/health                       # unauthenticated, expects 200
 curl -H "Authorization: Bearer $TOKEN" \
      -H "Accept: application/json, text/event-stream" \
      -H "Content-Type: application/json" \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-     https://$UMP_MCP_DOMAIN/mcp
+     https://mcp.example.org/mcp
 ```
-
-The transport is stateless (`json_response=True`), so no session affinity is needed
-and the service can be scaled to several replicas behind Traefik.
