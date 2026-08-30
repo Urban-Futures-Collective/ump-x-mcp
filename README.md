@@ -34,6 +34,8 @@ docker run --rm -p 8000:8000 --env-file .env ump-x-mcp
 
 `GET /health` is an unauthenticated liveness endpoint; everything under `/mcp` requires a valid Bearer JWT (unless `UMP_MCP_ALLOW_ANONYMOUS=true`).
 
+For the server: [`DEPLOY.md`](DEPLOY.md) describes the Dokploy setup — pushing to the `deploy` branch rebuilds and redeploys.
+
 ## Configuration
 
 All settings come from `UMP_MCP_*` environment variables (or a `.env` file — see [`.env.example`](.env.example)):
