@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "mcp>=1.9",
+    # 2.x removed the low-level Server.list_tools/call_tool decorators used in
+    # server.py (add_request_handler replaces them); pin until that is ported.
+    "mcp>=1.9,<2",
     "httpx>=0.27",
     "PyJWT[crypto]>=2.9",
     "pydantic>=2.7",
