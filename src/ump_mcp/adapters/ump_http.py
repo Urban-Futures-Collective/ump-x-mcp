@@ -15,6 +15,11 @@ from ump_mcp.ports import UmpApiError
 
 logger = logging.getLogger(__name__)
 
+#: Major of UMP's tool-catalog contract this adapter implements. UMP reports the
+#: exact revision in the body's ``version`` field; the path prefix carries only
+#: the major. A mismatch means the field contract may have changed underneath us.
+SUPPORTED_CATALOG_MAJOR = "1"
+
 
 def _auth_headers(user: UserContext) -> dict[str, str]:
     headers = {"Accept": "application/json"}
@@ -39,15 +44,36 @@ def _raise_for_ump_error(response: httpx.Response, what: str) -> None:
 
 
 class UmpHttpToolCatalogAdapter:
-    """ToolCatalogPort: GET {base}/mcp/tools, filtered by UMP per user token."""
+    """ToolCatalogPort: GET {base}{prefix}/tools, filtered by UMP per user token."""
 
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient, prefix: str = "/mcp/v1"):
         self._client = client
+        self._prefix = prefix.rstrip("/")
+        self._version_warned = False
+
+    def _check_contract(self, version: str) -> None:
+        """Warn once when UMP publishes a catalog major we were not written for."""
+        if self._version_warned or not version:
+            return
+        if version.split(".", 1)[0] != SUPPORTED_CATALOG_MAJOR:
+            self._version_warned = True
+            logger.warning(
+                "UMP tool-catalog contract is v%s but this server implements v%s.x "
+                "(catalog prefix %r). Tool fields may not map correctly — point "
+                "UMP_MCP_UMP_CATALOG_PREFIX at the matching version.",
+                version,
+                SUPPORTED_CATALOG_MAJOR,
+                self._prefix,
+            )
 
     async def list_tools(self, user: UserContext) -> list[ToolDescriptor]:
-        response = await self._client.get("/mcp/tools", headers=_auth_headers(user))
+        response = await self._client.get(
+            f"{self._prefix}/tools", headers=_auth_headers(user)
+        )
         _raise_for_ump_error(response, "tool discovery")
-        entries = response.json().get("tools", [])
+        payload = response.json()
+        self._check_contract(str(payload.get("version", "")))
+        entries = payload.get("tools", [])
 
         descriptors: list[ToolDescriptor] = []
         seen_names: set[str] = set()
@@ -70,16 +96,17 @@ class UmpHttpToolCatalogAdapter:
 
 
 class UmpHttpExecutionAdapter:
-    """ToolExecutionPort: POST {base}/processes/{provider:process}/execution."""
+    """ToolExecutionPort: POST {base}{prefix}/processes/{provider:process}/execution."""
 
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient, prefix: str = "/v1.0"):
         self._client = client
+        self._prefix = prefix.rstrip("/")
 
     async def execute(
         self, user: UserContext, process_id_with_prefix: str, inputs: dict[str, Any]
     ) -> ExecutionResult:
         response = await self._client.post(
-            f"/processes/{process_id_with_prefix}/execution",
+            f"{self._prefix}/processes/{process_id_with_prefix}/execution",
             json={"inputs": inputs},
             headers=_auth_headers(user),
         )
@@ -95,22 +122,25 @@ class UmpHttpExecutionAdapter:
 class UmpHttpJobsAdapter:
     """JobsPort: read-only job endpoints (status, results, listing)."""
 
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient, prefix: str = "/v1.0"):
         self._client = client
+        self._prefix = prefix.rstrip("/")
 
     async def list_jobs(self, user: UserContext) -> dict[str, Any]:
-        response = await self._client.get("/jobs/", headers=_auth_headers(user))
+        response = await self._client.get(f"{self._prefix}/jobs/", headers=_auth_headers(user))
         _raise_for_ump_error(response, "job listing")
         return response.json()
 
     async def get_job(self, user: UserContext, job_id: str) -> dict[str, Any]:
-        response = await self._client.get(f"/jobs/{job_id}", headers=_auth_headers(user))
+        response = await self._client.get(
+            f"{self._prefix}/jobs/{job_id}", headers=_auth_headers(user)
+        )
         _raise_for_ump_error(response, f"status of job '{job_id}'")
         return response.json()
 
     async def get_job_results(self, user: UserContext, job_id: str) -> dict[str, Any]:
         response = await self._client.get(
-            f"/jobs/{job_id}/results", headers=_auth_headers(user)
+            f"{self._prefix}/jobs/{job_id}/results", headers=_auth_headers(user)
         )
         _raise_for_ump_error(response, f"results of job '{job_id}'")
         return response.json()

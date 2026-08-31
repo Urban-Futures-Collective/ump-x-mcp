@@ -37,9 +37,9 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
     ump_client = build_ump_client(
         settings.ump_api_base_url, settings.ump_request_timeout
     )
-    catalog = UmpHttpToolCatalogAdapter(ump_client)
-    execution = UmpHttpExecutionAdapter(ump_client)
-    jobs = UmpHttpJobsAdapter(ump_client)
+    catalog = UmpHttpToolCatalogAdapter(ump_client, settings.ump_catalog_prefix)
+    execution = UmpHttpExecutionAdapter(ump_client, settings.ump_ogc_prefix)
+    jobs = UmpHttpJobsAdapter(ump_client, settings.ump_ogc_prefix)
     validator = KeycloakJwtValidationAdapter(
         jwks_url=settings.effective_jwks_url,
         issuer=settings.issuer,
@@ -65,9 +65,11 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
     async def lifespan(_app: Starlette) -> AsyncIterator[None]:
         async with session_manager.run():
             logger.info(
-                "ump-x-mcp %s ready — UMP at %s, issuer %s",
+                "ump-x-mcp %s ready — UMP at %s (catalog %s, OGC %s), issuer %s",
                 __version__,
                 settings.ump_api_base_url,
+                settings.ump_catalog_prefix,
+                settings.ump_ogc_prefix,
                 settings.issuer,
             )
             try:

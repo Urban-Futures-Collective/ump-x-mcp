@@ -13,9 +13,9 @@ It is a thin translation layer, deployed as an independent sidecar service next 
 ```
 Agent/LLM client ──(MCP over Streamable HTTP + Bearer JWT)──▶ this server
     1. validate JWT against Keycloak JWKS (zero trust)
-    2. GET  {UMP}/mcp/tools                (same JWT)  → per-user tool list
-    3. POST {UMP}/processes/{id}/execution (same JWT)  → jobID
-    4. GET  {UMP}/jobs/{jobID}[/results]   (same JWT)  → status / results
+    2. GET  {UMP}/mcp/v1/tools                  (same JWT)  → per-user tool list
+    3. POST {UMP}/v1.0/processes/{id}/execution (same JWT)  → jobID
+    4. GET  {UMP}/v1.0/jobs/{jobID}[/results]   (same JWT)  → status / results
 ```
 
 ## Running
@@ -42,7 +42,9 @@ All settings come from `UMP_MCP_*` environment variables (or a `.env` file — s
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `UMP_MCP_UMP_API_BASE_URL` | `http://localhost:5000/api` | UMP API root incl. prefix. |
+| `UMP_MCP_UMP_API_BASE_URL` | `http://localhost:5000` | UMP server root, without version prefix. |
+| `UMP_MCP_UMP_CATALOG_PREFIX` | `/mcp/v1` | Prefix of UMP's tool-catalog contract (`{base}{prefix}/tools`). |
+| `UMP_MCP_UMP_OGC_PREFIX` | `/v1.0` | Prefix of UMP's OGC API Processes surface (executions, jobs). |
 | `UMP_MCP_KEYCLOAK_URL` | `http://localhost:8080` | Keycloak base URL as reachable from this service. |
 | `UMP_MCP_KEYCLOAK_REALM` | `UMP` | Keycloak realm. |
 | `UMP_MCP_KEYCLOAK_ISSUER` | derived | Expected `iss` claim; set when tokens carry a public URL but Keycloak is reached internally. |

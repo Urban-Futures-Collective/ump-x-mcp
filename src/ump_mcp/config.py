@@ -1,6 +1,6 @@
 from functools import cached_property
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,10 +11,22 @@ class Settings(BaseSettings):
         env_prefix="UMP_MCP_", env_file=".env", extra="ignore"
     )
 
-    # UMP API root the MCP server talks to, including the API prefix,
-    # e.g. "http://localhost:5000/api". Discovery is GET {base}/mcp/tools,
-    # execution is POST {base}/processes/{provider:process}/execution.
-    ump_api_base_url: str = "http://localhost:5000/api"
+    # UMP API root the MCP server talks to — the server root, *without* a
+    # version prefix (UMP's own UMP_API_SERVER_URL_PREFIX, default "/"), e.g.
+    # "https://ump.example.org". The two prefixes below are appended to it.
+    ump_api_base_url: str = "http://localhost:5000"
+
+    # UMP publishes the tool catalog and the OGC API Processes surface under
+    # *separate*, independently versioned prefixes (UMP 3.0, see its
+    # adapters/web/mcp.py): the catalog contract versions on its own clock,
+    # the OGC prefix tracks the standard. Both are configurable so a UMP
+    # version bump is an environment change here, not a release.
+    #
+    # Catalog:   GET  {base}{catalog_prefix}/tools
+    ump_catalog_prefix: str = "/mcp/v1"
+    # Execution: POST {base}{ogc_prefix}/processes/{provider:process}/execution
+    # Jobs:      GET  {base}{ogc_prefix}/jobs[/{job_id}[/results]]
+    ump_ogc_prefix: str = "/v1.0"
 
     # Keycloak base URL as reachable from this service (may be an internal
     # cluster URL), e.g. "http://keycloak:8080" or "https://auth.example.com".
@@ -43,6 +55,12 @@ class Settings(BaseSettings):
 
     # Timeout (seconds) for calls against the UMP API.
     ump_request_timeout: float = Field(default=30.0, gt=0)
+
+    @field_validator("ump_api_base_url", "ump_catalog_prefix", "ump_ogc_prefix")
+    @classmethod
+    def _normalize_path(cls, value: str) -> str:
+        """Trim trailing slashes so prefixes concatenate predictably."""
+        return value.rstrip("/")
 
     @cached_property
     def issuer(self) -> str:

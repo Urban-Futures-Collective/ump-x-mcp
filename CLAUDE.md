@@ -23,7 +23,9 @@ Configuration is env-based (`UMP_MCP_*`, see `.env.example`); the server listens
 Three invariants drive everything; don't break them:
 
 1. **Zero trust.** Every request's Keycloak JWT is validated locally (JWKS, `iss`, `exp`, optional `aud`) in `auth.py`'s ASGI middleware *before* it reaches the MCP transport. The validated `UserContext` (including the raw token) travels via a contextvar (`ump_mcp.auth.current_user()`).
-2. **UMP is the source of truth.** There are no hard-coded process tools. `tools/list` fetches `GET {UMP}/mcp/tools` with the caller's JWT (per-user filtered by UMP); `tools/call` re-fetches the catalog to resolve the tool, validates arguments against its `inputSchema`, then `POST {UMP}/processes/{provider:process}/execution`. Never duplicate UMP's role logic here.
+2. **UMP is the source of truth.** There are no hard-coded process tools. `tools/list` fetches `GET {UMP}{catalog_prefix}/tools` with the caller's JWT (per-user filtered by UMP); `tools/call` re-fetches the catalog to resolve the tool, validates arguments against its `inputSchema`, then `POST {UMP}{ogc_prefix}/processes/{provider:process}/execution`. Never duplicate UMP's role logic here.
+
+   UMP 3.0 versions those two surfaces on separate clocks — the catalog contract at `/mcp/v1` (body field `version` reports the exact revision; `SUPPORTED_CATALOG_MAJOR` in the adapter is what we implement), the OGC surface at `/v1.0`. Both prefixes are settings (`ump_catalog_prefix`, `ump_ogc_prefix`) so a UMP bump is an env change, not a release. `ump_api_base_url` is the bare server root.
 3. **The original JWT is forwarded unchanged.** No synthetic identities, no direct DB access. `_auth_headers()` in `adapters/ump_http.py` is the only place the token goes onto outbound requests.
 
 Ports & adapters (strategy doc §9): `ports/` holds the Protocols (`ToolCatalogPort`, `ToolExecutionPort`, `JobsPort`, `IdentityValidationPort`); `adapters/` holds the v1 HTTP implementations. `server.py` (MCP core) depends only on the ports — a future UMP refactor swaps adapters without touching tool contracts.

@@ -11,7 +11,9 @@ from tests.conftest import AUDIENCE, ISSUER, make_token
 from ump_mcp.app import create_app
 from ump_mcp.config import Settings
 
-BASE = "http://ump.test/api"
+BASE = "http://ump.test"
+CATALOG_PREFIX = "/mcp/v1"
+OGC_PREFIX = "/v1.0"
 
 MCP_HEADERS = {
     "Accept": "application/json, text/event-stream",
@@ -46,6 +48,8 @@ def rpc(method: str, params: dict | None = None, id_: int = 1) -> dict:
 def settings():
     return Settings(
         ump_api_base_url=BASE,
+        ump_catalog_prefix=CATALOG_PREFIX,
+        ump_ogc_prefix=OGC_PREFIX,
         keycloak_url="https://auth.example.com",
         keycloak_realm="UMP",
         keycloak_issuer=ISSUER,
@@ -101,7 +105,7 @@ def test_tools_list_is_per_user(app_client, rsa_keypair):
         payload = CATALOG_USER_A if "user-a" in _sub_of(auth) else CATALOG_EMPTY
         return httpx.Response(200, json=payload)
 
-    respx.get(f"{BASE}/mcp/tools").mock(side_effect=catalog_by_token)
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").mock(side_effect=catalog_by_token)
 
     token_a = make_token(rsa_keypair, subject="user-a")
     token_b = make_token(rsa_keypair, subject="user-b")
@@ -119,8 +123,8 @@ def test_tools_list_is_per_user(app_client, rsa_keypair):
 
 @respx.mock
 def test_call_process_tool_executes_and_returns_job(app_client, rsa_keypair):
-    respx.get(f"{BASE}/mcp/tools").respond(json=CATALOG_USER_A)
-    execution = respx.post(f"{BASE}/processes/bikebox:plan_network/execution").respond(
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").respond(json=CATALOG_USER_A)
+    execution = respx.post(f"{BASE}{OGC_PREFIX}/processes/bikebox:plan_network/execution").respond(
         status_code=201, json={"jobID": "job-42", "status": "accepted"}
     )
 
@@ -147,7 +151,7 @@ def test_call_process_tool_executes_and_returns_job(app_client, rsa_keypair):
 
 @respx.mock
 def test_call_with_invalid_arguments_is_tool_error(app_client, rsa_keypair):
-    respx.get(f"{BASE}/mcp/tools").respond(json=CATALOG_USER_A)
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").respond(json=CATALOG_USER_A)
     token = make_token(rsa_keypair)
     result = rpc_result(
         post_mcp(
@@ -165,7 +169,7 @@ def test_call_with_invalid_arguments_is_tool_error(app_client, rsa_keypair):
 
 @respx.mock
 def test_call_tool_not_in_user_catalog_is_tool_error(app_client, rsa_keypair):
-    respx.get(f"{BASE}/mcp/tools").respond(json=CATALOG_EMPTY)
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").respond(json=CATALOG_EMPTY)
     token = make_token(rsa_keypair)
     result = rpc_result(
         post_mcp(
@@ -180,8 +184,8 @@ def test_call_tool_not_in_user_catalog_is_tool_error(app_client, rsa_keypair):
 
 @respx.mock
 def test_ump_authorization_error_surfaces_as_tool_error(app_client, rsa_keypair):
-    respx.get(f"{BASE}/mcp/tools").respond(json=CATALOG_USER_A)
-    respx.post(f"{BASE}/processes/bikebox:plan_network/execution").respond(
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").respond(json=CATALOG_USER_A)
+    respx.post(f"{BASE}{OGC_PREFIX}/processes/bikebox:plan_network/execution").respond(
         status_code=403, json={"detail": "missing role"}
     )
     token = make_token(rsa_keypair)
@@ -203,8 +207,8 @@ def test_ump_authorization_error_surfaces_as_tool_error(app_client, rsa_keypair)
 def test_builtin_job_status_tool(app_client, rsa_keypair):
     # The MCP SDK may refresh its tool cache on tools/call, so discovery can
     # be hit even for built-in tools.
-    respx.get(f"{BASE}/mcp/tools").respond(json=CATALOG_EMPTY)
-    respx.get(f"{BASE}/jobs/job-42").respond(
+    respx.get(f"{BASE}{CATALOG_PREFIX}/tools").respond(json=CATALOG_EMPTY)
+    respx.get(f"{BASE}{OGC_PREFIX}/jobs/job-42").respond(
         json={"jobID": "job-42", "status": "successful"}
     )
     token = make_token(rsa_keypair)
