@@ -37,10 +37,14 @@ class JwtAuthMiddleware:
         app: ASGIApp,
         validator: IdentityValidationPort,
         allow_anonymous: bool = False,
+        resource_metadata_url: str | None = None,
+        required_scopes: list[str] | None = None,
     ):
         self._app = app
         self._validator = validator
         self._allow_anonymous = allow_anonymous
+        self._resource_metadata_url = resource_metadata_url
+        self._required_scopes = required_scopes or []
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -56,12 +60,17 @@ class JwtAuthMiddleware:
                 user = self._validator.validate(token)
             except IdentityValidationError as exc:
                 logger.info("Rejected request: %s", exc)
-                await _unauthorized(send, str(exc))
+                await self._unauthorized(send, str(exc), error="invalid_token")
+                return
+            missing = self._missing_scopes(user)
+            if missing:
+                logger.info("Rejected request: missing scope(s) %s", ", ".join(missing))
+                await self._forbidden(send, missing)
                 return
         elif self._allow_anonymous:
             user = ANONYMOUS
         else:
-            await _unauthorized(send, "Missing Bearer token")
+            await self._unauthorized(send, "Missing Bearer token")
             return
 
         reset = _current_user.set(user)
@@ -70,18 +79,59 @@ class JwtAuthMiddleware:
         finally:
             _current_user.reset(reset)
 
+    def _missing_scopes(self, user: UserContext) -> list[str]:
+        """Scopes required but absent from the token's space-delimited `scope`."""
+        if not self._required_scopes:
+            return []
+        granted = set(str(user.claims.get("scope", "")).split())
+        return [s for s in self._required_scopes if s not in granted]
 
-async def _unauthorized(send: Send, detail: str) -> None:
-    body = json.dumps({"error": "unauthorized", "detail": detail}).encode()
+    def _challenge(self, **params: str) -> str:
+        """RFC 6750 challenge; `resource_metadata` points clients at RFC 9728
+        discovery so they can run the auth-code flow instead of being handed a
+        token out of band."""
+        if self._resource_metadata_url:
+            params["resource_metadata"] = self._resource_metadata_url
+        if not params:
+            return "Bearer"
+        rendered = ", ".join(f'{k}="{v}"' for k, v in params.items())
+        return f"Bearer {rendered}"
+
+    async def _unauthorized(
+        self, send: Send, detail: str, error: str = "invalid_request"
+    ) -> None:
+        await _send_json(
+            send,
+            401,
+            {"error": "unauthorized", "detail": detail},
+            self._challenge(error=error, error_description=detail),
+        )
+
+    async def _forbidden(self, send: Send, missing: list[str]) -> None:
+        detail = f"Token is missing required scope(s): {' '.join(missing)}"
+        await _send_json(
+            send,
+            403,
+            {"error": "insufficient_scope", "detail": detail},
+            self._challenge(
+                error="insufficient_scope",
+                error_description=detail,
+                scope=" ".join(self._required_scopes),
+            ),
+        )
+
+
+async def _send_json(send: Send, status: int, body: dict, challenge: str) -> None:
+    payload = json.dumps(body).encode()
     await send(
         {
             "type": "http.response.start",
-            "status": 401,
+            "status": status,
             "headers": [
                 (b"content-type", b"application/json"),
-                (b"www-authenticate", b"Bearer"),
-                (b"content-length", str(len(body)).encode()),
+                (b"www-authenticate", challenge.encode()),
+                (b"content-length", str(len(payload)).encode()),
             ],
         }
     )
-    await send({"type": "http.response.body", "body": body})
+    await send({"type": "http.response.body", "body": payload})

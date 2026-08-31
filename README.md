@@ -51,6 +51,8 @@ All settings come from `UMP_MCP_*` environment variables (or a `.env` file — s
 | `UMP_MCP_JWKS_URL` | derived | JWKS endpoint override. |
 | `UMP_MCP_AUDIENCE` | *(unset)* | Expected `aud` claim. **Unset disables the audience check** — configure a Keycloak audience mapper and set this in production. |
 | `UMP_MCP_ALLOW_ANONYMOUS` | `false` | Accept requests without a JWT; UMP then only shows anonymous-access processes. |
+| `UMP_MCP_RESOURCE_URL` | *(unset)* | Public MCP endpoint URL = OAuth resource identifier (RFC 9728). Enables client-driven login; unset disables discovery. |
+| `UMP_MCP_REQUIRED_SCOPES` | *(empty)* | Scopes a token must carry, space/comma separated. Enforced per request. |
 | `UMP_MCP_HOST` / `UMP_MCP_PORT` | `0.0.0.0` / `8000` | Bind address. |
 | `UMP_MCP_LOG_LEVEL` | `INFO` | Log level. |
 | `UMP_MCP_UMP_REQUEST_TIMEOUT` | `30` | Timeout (s) for UMP API calls. |
@@ -65,6 +67,12 @@ claude mcp add --transport http ump http://localhost:8000/mcp \
 ```
 
 The token is a normal Keycloak user access token — the same one the UMP frontend uses.
+
+Better: set `UMP_MCP_RESOURCE_URL` and let the client log the user in. The server then
+publishes OAuth 2.0 Protected Resource Metadata (RFC 9728) at
+`/.well-known/oauth-protected-resource[/mcp]` and names it in the `WWW-Authenticate`
+challenge, so a client discovers Keycloak, runs auth-code + PKCE in the browser, and
+refreshes silently — one login instead of a token pasted every five minutes.
 
 ## Architecture (code layout)
 

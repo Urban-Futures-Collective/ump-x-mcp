@@ -88,7 +88,7 @@ def test_health_is_public(app_client):
 def test_request_without_token_is_401(app_client):
     response = app_client.post("/mcp", json=rpc("tools/list"), headers=MCP_HEADERS)
     assert response.status_code == 401
-    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.headers["WWW-Authenticate"].startswith("Bearer")
 
 
 def test_request_with_invalid_token_is_401(app_client):

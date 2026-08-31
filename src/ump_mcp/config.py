@@ -1,4 +1,5 @@
 from functools import cached_property
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,6 +50,22 @@ class Settings(BaseSettings):
     # anonymous-access processes. Default: require a valid token (zero trust).
     allow_anonymous: bool = False
 
+    # Public URL of this server's MCP endpoint, e.g.
+    # "https://mcp.example.org/mcp". This is the OAuth *resource identifier*
+    # (RFC 9728): it is published in the protected-resource metadata and named
+    # in the WWW-Authenticate challenge, so MCP clients can discover Keycloak
+    # and run the auth-code flow themselves instead of being handed a token.
+    #
+    # It cannot be inferred — TLS is terminated by the ingress, so the app only
+    # ever sees http://0.0.0.0:8000. Leaving it unset disables OAuth discovery;
+    # bearer validation is unaffected.
+    resource_url: str | None = None
+
+    # Scopes a token must carry, space- or comma-separated. Published in the
+    # metadata as scopes_supported and enforced on every request. Empty means
+    # no scope requirement beyond a valid token.
+    required_scopes: str = ""
+
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"
@@ -61,6 +78,22 @@ class Settings(BaseSettings):
     def _normalize_path(cls, value: str) -> str:
         """Trim trailing slashes so prefixes concatenate predictably."""
         return value.rstrip("/")
+
+    @cached_property
+    def scopes(self) -> list[str]:
+        return [s for s in self.required_scopes.replace(",", " ").split() if s]
+
+    @cached_property
+    def resource_metadata_url(self) -> str | None:
+        """RFC 9728 §3.1 metadata URL for `resource_url` (path-inserted form)."""
+        if not self.resource_url:
+            return None
+        parsed = urlparse(self.resource_url)
+        path = parsed.path if parsed.path != "/" else ""
+        return (
+            f"{parsed.scheme}://{parsed.netloc}"
+            f"/.well-known/oauth-protected-resource{path}"
+        )
 
     @cached_property
     def issuer(self) -> str:
