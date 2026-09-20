@@ -114,7 +114,7 @@ async def test_execution_error_surfaces_status(client):
 
 @respx.mock
 async def test_jobs_adapter_paths(client):
-    respx.get(f"{BASE}{OGC_PREFIX}/jobs/").respond(json={"jobs": []})
+    respx.get(f"{BASE}{OGC_PREFIX}/jobs").respond(json={"jobs": []})
     respx.get(f"{BASE}{OGC_PREFIX}/jobs/job-1").respond(json={"jobID": "job-1", "status": "running"})
     respx.get(f"{BASE}{OGC_PREFIX}/jobs/job-1/results").respond(json={"answer": 42})
 

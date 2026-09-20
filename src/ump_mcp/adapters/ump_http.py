@@ -127,7 +127,9 @@ class UmpHttpJobsAdapter:
         self._prefix = prefix.rstrip("/")
 
     async def list_jobs(self, user: UserContext) -> dict[str, Any]:
-        response = await self._client.get(f"{self._prefix}/jobs/", headers=_auth_headers(user))
+        # No trailing slash. UMP 3.0 runs FastAPI with ``redirect_slashes=False``,
+        # so ``/v1.0/jobs/`` is a 404 while ``/v1.0/jobs`` is the listing.
+        response = await self._client.get(f"{self._prefix}/jobs", headers=_auth_headers(user))
         _raise_for_ump_error(response, "job listing")
         return response.json()
 
