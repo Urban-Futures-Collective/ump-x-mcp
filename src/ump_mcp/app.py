@@ -27,6 +27,7 @@ from ump_mcp.adapters.ump_http import (
 )
 from ump_mcp.auth import JwtAuthMiddleware
 from ump_mcp.config import Settings
+from ump_mcp.landing import landing_routes
 from ump_mcp.server import build_mcp_server
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,9 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
                 await ump_client.aclose()
 
     starlette_app = Starlette(
-        routes=[Route("/health", health, methods=["GET"])] + _discovery_routes(settings),
+        routes=[Route("/health", health, methods=["GET"])]
+        + _discovery_routes(settings)
+        + landing_routes(settings),
         lifespan=lifespan,
     )
 

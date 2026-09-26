@@ -34,6 +34,14 @@ docker run --rm -p 8000:8000 --env-file .env ump-x-mcp
 
 `GET /health` is an unauthenticated liveness endpoint; everything under `/mcp` requires a valid Bearer JWT (unless `UMP_MCP_ALLOW_ANONYMOUS=true`).
 
+`GET /` serves a small landing page (English/German, following `Accept-Language`, switchable
+with `?lang=de`) for people who open the address in a browser: what the service is and which
+endpoint to paste into a client. It follows the Urban Futures Collective design system —
+Poppins for headings and UI, Satoshi for body copy, yellow as the single accent, square
+corners, fluid Utopia type and space scales. Fonts and the brand mark are served from
+`/static`, so the page makes no external request; `src/ump_mcp/static/OFL.txt` covers Poppins,
+Satoshi is under the ITF Free Font Licence.
+
 For the server: [`DEPLOY.md`](DEPLOY.md) describes the Dokploy setup — pushing to the `deploy` branch rebuilds and redeploys.
 
 ## Configuration
@@ -83,6 +91,7 @@ src/ump_mcp/
 ├── server.py            # MCP core: dynamic list_tools / call_tool against the ports
 ├── app.py               # ASGI wiring: Streamable HTTP transport + auth middleware
 ├── auth.py              # JWT middleware (zero trust) + per-request user context
+├── landing.py           # the browser-facing page at / (EN/DE) + its fonts
 ├── config.py            # UMP_MCP_* settings
 ├── domain/models.py     # ToolDescriptor, UserContext, ExecutionResult
 ├── ports/               # ToolCatalogPort, ToolExecutionPort, JobsPort, IdentityValidationPort
