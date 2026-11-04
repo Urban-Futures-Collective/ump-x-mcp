@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # no scope requirement beyond a valid token.
     required_scopes: str = ""
 
+    # Realm role a signed-in caller must hold to use this server at all, e.g.
+    # "mcp-user". Lets platform admins switch MCP off per account (UMP-X #111,
+    # item 31). Unset means no role check. Anonymous callers are not affected:
+    # they only ever see anonymous-access processes. This is a gate on this
+    # service, not UMP's process authorization, which stays in UMP.
+    required_role: str | None = None
+
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"

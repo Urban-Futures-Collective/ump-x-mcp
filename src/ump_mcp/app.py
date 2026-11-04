@@ -101,6 +101,7 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
         allow_anonymous=settings.allow_anonymous,
         resource_metadata_url=settings.resource_metadata_url,
         required_scopes=settings.scopes,
+        required_role=settings.required_role,
     )
 
     async def health(_request):

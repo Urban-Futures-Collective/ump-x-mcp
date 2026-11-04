@@ -39,12 +39,14 @@ class JwtAuthMiddleware:
         allow_anonymous: bool = False,
         resource_metadata_url: str | None = None,
         required_scopes: list[str] | None = None,
+        required_role: str | None = None,
     ):
         self._app = app
         self._validator = validator
         self._allow_anonymous = allow_anonymous
         self._resource_metadata_url = resource_metadata_url
         self._required_scopes = required_scopes or []
+        self._required_role = required_role or None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -66,6 +68,10 @@ class JwtAuthMiddleware:
             if missing:
                 logger.info("Rejected request: missing scope(s) %s", ", ".join(missing))
                 await self._forbidden(send, missing)
+                return
+            if self._required_role and self._required_role not in _realm_roles(user):
+                logger.info("Rejected request: missing role %s", self._required_role)
+                await self._missing_role(send)
                 return
         elif self._allow_anonymous:
             user = ANONYMOUS
@@ -119,6 +125,26 @@ class JwtAuthMiddleware:
                 scope=" ".join(self._required_scopes),
             ),
         )
+
+
+    async def _missing_role(self, send: Send) -> None:
+        detail = (
+            "MCP access is not enabled for this account. "
+            "Ask a platform administrator to enable it."
+        )
+        await _send_json(
+            send,
+            403,
+            {"error": "insufficient_role", "detail": detail},
+            self._challenge(error="insufficient_scope", error_description=detail),
+        )
+
+
+def _realm_roles(user: UserContext) -> set[str]:
+    """Realm roles from Keycloak's `realm_access.roles` claim."""
+    access = user.claims.get("realm_access")
+    roles = access.get("roles") if isinstance(access, dict) else None
+    return {r for r in roles if isinstance(r, str)} if isinstance(roles, list) else set()
 
 
 async def _send_json(send: Send, status: int, body: dict, challenge: str) -> None:
