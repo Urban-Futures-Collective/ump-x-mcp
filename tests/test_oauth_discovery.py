@@ -109,3 +109,50 @@ def test_required_scopes_published_in_metadata(jwks_server):
         body = c.get(METADATA_PATH).json()
 
     assert body["scopes_supported"] == ["openid", "ump:use"]
+
+
+def _list_tools(c, token):
+    return c.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        headers={**MCP_HEADERS, "Authorization": f"Bearer {token}"},
+    )
+
+
+def test_missing_required_role_is_403(jwks_server, rsa_keypair):
+    token = make_token(rsa_keypair, extra_claims={"realm_access": {"roles": ["user"]}})
+
+    with TestClient(create_app(_settings(required_role="mcp-user"))) as c:
+        response = _list_tools(c, token)
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "insufficient_role"
+
+
+def test_token_without_realm_roles_is_403(jwks_server, rsa_keypair):
+    token = make_token(rsa_keypair)
+
+    with TestClient(create_app(_settings(required_role="mcp-user"))) as c:
+        response = _list_tools(c, token)
+
+    assert response.status_code == 403
+
+
+def test_required_role_present_passes_the_gate(jwks_server, rsa_keypair):
+    token = make_token(rsa_keypair, extra_claims={"realm_access": {"roles": ["user", "mcp-user"]}})
+
+    with TestClient(create_app(_settings(required_role="mcp-user"))) as c:
+        response = _list_tools(c, token)
+
+    assert response.status_code not in (401, 403)
+
+
+def test_anonymous_is_not_affected_by_the_role(jwks_server):
+    with TestClient(create_app(_settings(required_role="mcp-user", allow_anonymous=True))) as c:
+        response = c.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            headers=MCP_HEADERS,
+        )
+
+    assert response.status_code not in (401, 403)
