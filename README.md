@@ -61,6 +61,7 @@ All settings come from `UMP_MCP_*` environment variables (or a `.env` file — s
 | `UMP_MCP_ALLOW_ANONYMOUS` | `false` | Accept requests without a JWT; UMP then only shows anonymous-access processes. |
 | `UMP_MCP_RESOURCE_URL` | *(unset)* | Public MCP endpoint URL = OAuth resource identifier (RFC 9728). Enables client-driven login; unset disables discovery. |
 | `UMP_MCP_REQUIRED_SCOPES` | *(empty)* | Scopes a token must carry, space/comma separated. Enforced per request. |
+| `UMP_MCP_REQUIRED_ROLE` | *(unset)* | Realm role (`realm_access.roles`) a signed-in caller must hold, e.g. `mcp-user`; 403 otherwise. Lets platform admins switch MCP off per account. Unset: no role check. Anonymous callers are unaffected. |
 | `UMP_MCP_HOST` / `UMP_MCP_PORT` | `0.0.0.0` / `8000` | Bind address. |
 | `UMP_MCP_LOG_LEVEL` | `INFO` | Log level. |
 | `UMP_MCP_UMP_REQUEST_TIMEOUT` | `30` | Timeout (s) for UMP API calls. |
